@@ -1,12 +1,15 @@
+import re
 import sys
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem, QWidget, QVBoxLayout, QPushButton, QStyledItemDelegate, QLineEdit, QLabel, \
-    QHeaderView, QMenu
+    QHeaderView, QMenu, QFileDialog
 
+import json
 
+import yaml
 class Item(QTreeWidgetItem):
     def __init__(self, parent, data):
         super().__init__(parent, data)
@@ -326,9 +329,14 @@ class DictTreeWidget(QTreeWidget):
 class MyWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.filename = None
 
         self.setWindowTitle("QTreeWidget Example")
         self.setGeometry(100, 100, 600, 400)
+        file = self.menuBar().addMenu("File")
+        file.addAction("Open", self.open_file)
+        file.addAction("Save", self.save)
+        file.addAction("Save as", self.save_as)
 
         self.tree_widget = DictTreeWidget()
         self.tree_widget.populate_tree({
@@ -364,6 +372,37 @@ class MyWindow(QMainWindow):
         helper.setLayout(layout)
         self.setCentralWidget(helper)
 
+    def save(self, filename=None):
+        self.filename = filename if filename else self.filename
+        if self.filename:
+            data = self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0))
+            with open(self.filename, "w") as f:
+                if self.filename.endswith(".json"):
+                    json.dump(data, f)
+                elif self.filename.endswith(".yaml"):
+                    yaml.dump(data, f)
+    def save_as(self):
+        filename, ext = QFileDialog.getSaveFileName(self, "Save File", "", "JSON Files (*.json);;YAML Files (*.yaml)")
+        if filename:
+            ext = re.search(r'\(\*(\.[a-zA-Z0-9]+)\)', ext).group(1)
+            if not filename.endswith(ext):
+                filename += ext
+
+            self.save(filename)
+    def open_file(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Open File", "", "JSON Files (*.json);;YAML Files (*.yaml)")
+        if filename:
+            if filename.endswith(".json"):
+                with open(filename, "r") as f:
+                    data = json.load(f)
+            elif filename.endswith(".yaml"):
+                with open(filename, "r") as f:
+                    data = yaml.load(f, Loader=yaml.FullLoader)
+
+            self.tree_widget.clear()
+            self.tree_widget.populate_tree(data, None)
+            self.tree_widget.resizeColumnToContents(0)
+            self.tree_widget.resizeColumnToContents(1)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
