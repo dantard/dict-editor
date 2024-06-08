@@ -1,3 +1,4 @@
+import os.path
 import re
 import sys
 
@@ -49,23 +50,15 @@ class Item(QTreeWidgetItem):
         else:
             super().setText(column, atext)
 
-    '''
-    def setData(self, column, role, value):
-        if role == Qt.EditRole and column in self.readonly:
-            # super().setData(column, role, value)
-            return
-        return super().setData(column, role, value)
-    '''
 
-
-class Dict(Item):
+class DictRoot(Item):
     def __init__(self, parent):
         super().__init__(parent, ["{dict}"])
         self.setForeground(0, QtCore.Qt.red)
         self.readonly([0])
 
 
-class List(Item):
+class ListRoot(Item):
     def __init__(self, parent):
         super().__init__(parent, ["[list]"])
         self.setForeground(0, QtCore.Qt.magenta)
@@ -134,6 +127,7 @@ class DictTreeWidget(QTreeWidget):
         font = QFont("Courier New", 12)  # Create a QFont object specifying the monospace font family and size
         self.setFont(font)
         self.itemExpanded.connect(self.resize_column)
+        self.setColumnCount(2)
         # self.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
 
     def resize_column(self):
@@ -152,10 +146,10 @@ class DictTreeWidget(QTreeWidget):
 
         add_dict_entry, add_list_entry = None, None
 
-        if type(item) in [ListEntryDict, DictEntryDict, Dict]:
+        if type(item) in [ListEntryDict, DictEntryDict, DictRoot]:
             add_dict_entry = menu.addAction("Add Dict Entry")
 
-        elif type(item) in [ListEntryList, DictEntryList, List]:
+        elif type(item) in [ListEntryList, DictEntryList, ListRoot]:
             add_list_entry = menu.addAction("Add List Entry")
 
         res = menu.exec(a0.globalPos())
@@ -181,19 +175,19 @@ class DictTreeWidget(QTreeWidget):
     def populate_tree(self, value, parent=None, key=None):
         if parent is None:
             if type(value) == dict:
-                parent = Dict(self.invisibleRootItem())
+                parent = DictRoot(self.invisibleRootItem())
                 self.addTopLevelItem(parent)
                 self.invisibleRootItem().addChild(parent)
                 for key, value in value.items():
                     self.populate_tree(value, parent, key)
             elif type(value) == list:
-                parent = List(self.invisibleRootItem())
+                parent = ListRoot(self.invisibleRootItem())
                 self.addTopLevelItem(parent)
                 self.invisibleRootItem().addChild(parent)
                 for i, elem in enumerate(value):
                     self.populate_tree(elem, parent, i)
             return
-        elif type(parent) == List:
+        elif type(parent) in [ListRoot, DictEntryList, ListEntryList]:
             if type(value) == dict:
                 item = ListEntryDict(parent, key)
                 for key, value in value.items():
@@ -207,7 +201,7 @@ class DictTreeWidget(QTreeWidget):
             else:
                 item = ListEntryValue(parent, key, value)
                 parent.addChild(item)
-        elif type(parent) == Dict:
+        elif type(parent) in [DictRoot, DictEntryDict, ListEntryDict]:
             if type(value) == dict:
                 item = DictEntryDict(parent, key)
                 for key, value in value.items():
@@ -220,73 +214,14 @@ class DictTreeWidget(QTreeWidget):
                 parent.addChild(item)
             else:
                 item = DictEntryValue(parent, key, value)
-                parent.addChild(item)
-        elif type(parent) == DictEntryDict:
-            print("DictEntryDict", parent, key, value, type(value))
-            if type(value) == dict:
-                item = DictEntryDict(parent, key)
-                for key, value in value.items():
-                    self.populate_tree(value, item, key)
-                parent.addChild(item)
-            elif type(value) == list:
-                item = DictEntryList(parent, key)
-                for i, elem in enumerate(value):
-                    print("DictEntryDict2", parent, key, value, type(value))
-                    self.populate_tree(elem, item, i)
-                parent.addChild(item)
-            else:
-                item = DictEntryValue(parent, key, value)
-                parent.addChild(item)
-        elif type(parent) == DictEntryList:
-            print("DictEntryList", parent, key, value)
-            if type(value) == dict:
-                item = ListEntryDict(parent, key)
-                for key, value in value.items():
-                    self.populate_tree(value, item, key)
-                parent.addChild(item)
-            elif type(value) == list:
-                item = ListEntryList(parent, key)
-                for i, elem in enumerate(value):
-                    self.populate_tree(elem, item, i)
-                parent.addChild(item)
-            else:
-                item = ListEntryValue(parent, key, value)
-                parent.addChild(item)
-        elif type(parent) == ListEntryDict:
-            if type(value) == dict:
-                item = DictEntryDict(parent, key)
-                for key, value in value.items():
-                    self.populate_tree(value, item, key)
-                parent.addChild(item)
-            elif type(value) == list:
-                item = DictEntryList(parent, key)
-                for i, elem in enumerate(value):
-                    self.populate_tree(elem, item, i)
-                parent.addChild(item)
-            else:
-                item = DictEntryValue(parent, key, value)
-                parent.addChild(item)
-        elif type(parent) == ListEntryList:
-            if type(value) == dict:
-                item = ListEntryDict(parent, key)
-                for key, value in value.items():
-                    self.populate_tree(value, item, key)
-                parent.addChild(item)
-            elif type(value) == list:
-                item = ListEntryList(parent, key)
-                for i, elem in enumerate(value):
-                    self.populate_tree(elem, item, i)
-                parent.addChild(item)
-            else:
-                item = ListEntryValue(parent, key, value)
                 parent.addChild(item)
 
     def traverse_tree(self, item, output=None):
-        if type(item) == Dict:
+        if type(item) == DictRoot:
             output = {}
             for i in range(item.childCount()):
                 self.traverse_tree(item.child(i), output)
-        elif type(item) == List:
+        elif type(item) == ListRoot:
             output = []
             for i in range(item.childCount()):
                 self.traverse_tree(item.child(i), output)
@@ -313,32 +248,65 @@ class DictTreeWidget(QTreeWidget):
 
         return output
 
-        '''
-        elif type(item) == ListTreeItem:
-            if output is None:
-                output = []
+    def traverse_tree_2(self, item, output=None):
+        if output is None:
+            output = {} if isinstance(item, DictRoot) else []  # Initialize output if not provided
+
+        if isinstance(item, (DictRoot, ListRoot)):
+            for i in range(item.childCount()):
+                self.traverse_tree_2(item.child(i), output)
+        elif isinstance(item, (DictEntryValue, ListEntryValue)):
+            if isinstance(item, DictEntryValue):
+                output[item.get_key()] = item.get_value()
             else:
-        '''
+                output.append(item.get_value())
+        elif isinstance(item, (DictEntryList, ListEntryList)):
+            sub_output = []
+            for i in range(item.childCount()):
+                self.traverse_tree_2(item.child(i), sub_output)
+            if isinstance(item, DictEntryList):
+                output[item.get_key()] = sub_output
+            else:
+                output.append(sub_output)
+        elif isinstance(item, (DictEntryDict, ListEntryDict)):
+            sub_output = {}
+            for i in range(item.childCount()):
+                self.traverse_tree_2(item.child(i), sub_output)
+            if isinstance(item, DictEntryDict):
+                output[item.get_key()] = sub_output
+            else:
+                output.append(sub_output)
 
-        # Recursively traverse children
-        # for i in range(item.childCount()):
-        #    print("Child:", type(item.child(i)))
-        #    self.traverse_tree(item.child(i))
+        return output
 
 
-class MyWindow(QMainWindow):
+
+class DictEditorWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.filename = None
 
-        self.setWindowTitle("QTreeWidget Example")
+        self.setWindowTitle("Dictionary Editor")
         self.setGeometry(100, 100, 600, 400)
         file = self.menuBar().addMenu("File")
         file.addAction("Open", self.open_file)
         file.addAction("Save", self.save)
         file.addAction("Save as", self.save_as)
 
+        self.config = {}
+        try:
+            with open("config.yaml", "r") as f:
+                self.config = yaml.load(f, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            pass
+
+
+        tb = self.addToolBar("File")
+        tb.addAction("Refresh", self.refresh)
+
         self.tree_widget = DictTreeWidget()
+        self.tree_widget.setHeaderLabels(["Key", "Value"])
+        '''
         self.tree_widget.populate_tree({
             1:1,
             2:2,
@@ -362,15 +330,21 @@ class MyWindow(QMainWindow):
         self.out = None
         out = self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0))
         print("Output", out)
-        self.tree_widget.setHeaderLabels(["Name", "Value"])
+        self.tree_widget.setHeaderLabels(["Name", "Value"])'''
         button = QPushButton("Print")
-        button.clicked.connect(lambda: print(self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0))))
+        button.clicked.connect(self.print_data)
         helper = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(self.tree_widget)
         layout.addWidget(button)
         helper.setLayout(layout)
         self.setCentralWidget(helper)
+
+
+
+    def print_data(self):
+        print(self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0)))
+        print(self.tree_widget.traverse_tree_2(self.tree_widget.invisibleRootItem().child(0)))
 
     def save(self, filename=None):
         self.filename = filename if filename else self.filename
@@ -389,8 +363,11 @@ class MyWindow(QMainWindow):
                 filename += ext
 
             self.save(filename)
-    def open_file(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "Open File", "", "JSON Files (*.json);;YAML Files (*.yaml)")
+    def open_file(self, filename=None):
+        directory = self.config.get("directory", "")
+        if filename is None:
+            filename, _ = QFileDialog.getOpenFileName(self, "Open File", directory, "JSON Files (*.json);;YAML Files (*.yaml)")
+
         if filename:
             if filename.endswith(".json"):
                 with open(filename, "r") as f:
@@ -399,13 +376,21 @@ class MyWindow(QMainWindow):
                 with open(filename, "r") as f:
                     data = yaml.load(f, Loader=yaml.FullLoader)
 
+            directory = os.path.dirname(filename)
+            self.config["directory"] = directory
+            with open("config.yaml", "w") as f:
+                yaml.dump(self.config, f)
+            self.filename = filename
             self.tree_widget.clear()
             self.tree_widget.populate_tree(data, None)
             self.tree_widget.resizeColumnToContents(0)
             self.tree_widget.resizeColumnToContents(1)
 
+    def refresh(self):
+        self.open_file(self.filename)
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MyWindow()
+    window = DictEditorWindow()
     window.show()
     sys.exit(app.exec_())
