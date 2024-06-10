@@ -1,7 +1,8 @@
+#!/usr/bin/env python3
 import os.path
 import re
 import sys
-
+from dicteditor.utils import sum
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QIcon
@@ -19,6 +20,7 @@ class Item(QTreeWidgetItem):
         self.key_type = str
         self.value_type = str
         self.widgets = {}
+        print(sum(3,5))
 
     def readonly(self, columns):
         for column in columns:
@@ -295,16 +297,16 @@ class DictEditorWindow(QMainWindow):
 
         self.config = {}
         try:
-            with open("config.yaml", "r") as f:
+            with open("../../config.yaml", "r") as f:
                 self.config = yaml.load(f, Loader=yaml.FullLoader)
         except FileNotFoundError:
             pass
 
 
         tb = self.addToolBar("File")
-        tb.addAction(QIcon("icons/open.png"), "Open", self.open_file)
-        tb.addAction(QIcon("icons/save.png"), "Save", self.save)
-        tb.addAction(QIcon("icons/refresh.png"), "Refresh",  self.refresh )
+        tb.addAction(QIcon("../icons/open.png"), "Open", self.open_file)
+        tb.addAction(QIcon("../icons/save.png"), "Save", self.save)
+        tb.addAction(QIcon("../icons/refresh.png"), "Refresh", self.refresh)
 
         self.tree_widget = DictTreeWidget()
         self.tree_widget.setHeaderLabels(["Key", "Value"])
@@ -340,7 +342,7 @@ class DictEditorWindow(QMainWindow):
         self.setCentralWidget(helper)
         self.setWindowTitle("Dictionary Editor")
         try:
-            with open("dict-editor.yaml", "r") as f:
+            with open("../../dict-editor.yaml", "r") as f:
                 self.config = yaml.load(f, Loader=yaml.FullLoader)
                 self.open_file(self.config["filename"])
                 self.set_expanded_recursive([int(x) for x in self.config["expanded"]])
@@ -388,7 +390,7 @@ class DictEditorWindow(QMainWindow):
 
             directory = os.path.dirname(filename)
             self.config["directory"] = directory
-            with open("config.yaml", "w") as f:
+            with open("../../config.yaml", "w") as f:
                 yaml.dump(self.config, f)
             self.filename = filename
             self.tree_widget.clear()
@@ -425,7 +427,7 @@ class DictEditorWindow(QMainWindow):
 
     def closeEvent(self, a0):
         if self.filename:
-            with open("dict-editor.yaml", "w") as f:
+            with open("../../dict-editor.yaml", "w") as f:
                 v = self.get_expanded_recursive()
                 expanded = ""
                 for e in v:
@@ -436,6 +438,12 @@ class DictEditorWindow(QMainWindow):
 
 
         super().closeEvent(a0)
+
+def main2():
+    app = QApplication(sys.argv)
+    window = DictEditorWindow()
+    window.show()
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
