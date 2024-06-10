@@ -4,7 +4,7 @@ import sys
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem, QWidget, QVBoxLayout, QPushButton, QStyledItemDelegate, QLineEdit, QLabel, \
     QHeaderView, QMenu, QFileDialog
 
@@ -302,7 +302,9 @@ class DictEditorWindow(QMainWindow):
 
 
         tb = self.addToolBar("File")
-        tb.addAction("Refresh", self.refresh)
+        tb.addAction(QIcon("icons/open.png"), "Open", self.open_file)
+        tb.addAction(QIcon("icons/save.png"), "Save", self.save)
+        tb.addAction(QIcon("icons/refresh.png"), "Refresh",  self.refresh )
 
         self.tree_widget = DictTreeWidget()
         self.tree_widget.setHeaderLabels(["Key", "Value"])
@@ -331,20 +333,28 @@ class DictEditorWindow(QMainWindow):
         out = self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0))
         print("Output", out)
         self.tree_widget.setHeaderLabels(["Name", "Value"])'''
-        button = QPushButton("Print")
-        button.clicked.connect(self.print_data)
         helper = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(self.tree_widget)
-        layout.addWidget(button)
         helper.setLayout(layout)
         self.setCentralWidget(helper)
+        self.setWindowTitle("Dictionary Editor")
+        try:
+            with open("dict-editor.yaml", "r") as f:
+                self.config = yaml.load(f, Loader=yaml.FullLoader)
+                self.open_file(self.config["filename"])
+                self.set_expanded_recursive([int(x) for x in self.config["expanded"]])
+                x = self.config.get("geometry", [0,0, 100,200])
+                self.setGeometry(x[0], x[1], x[2], x[3])
+        except FileNotFoundError:
+            pass
 
 
 
-    def print_data(self):
-        print(self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0)))
-        print(self.tree_widget.traverse_tree_2(self.tree_widget.invisibleRootItem().child(0)))
+
+    #def print_data(self):
+    #    print(self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0)))
+    #    print(self.tree_widget.traverse_tree_2(self.tree_widget.invisibleRootItem().child(0)))
 
     def save(self, filename=None):
         self.filename = filename if filename else self.filename
@@ -355,13 +365,13 @@ class DictEditorWindow(QMainWindow):
                     json.dump(data, f)
                 elif self.filename.endswith(".yaml"):
                     yaml.dump(data, f)
+            self.setWindowTitle("Dictionary Editor - " + self.filename)
     def save_as(self):
         filename, ext = QFileDialog.getSaveFileName(self, "Save File", "", "JSON Files (*.json);;YAML Files (*.yaml)")
         if filename:
             ext = re.search(r'\(\*(\.[a-zA-Z0-9]+)\)', ext).group(1)
             if not filename.endswith(ext):
                 filename += ext
-
             self.save(filename)
     def open_file(self, filename=None):
         directory = self.config.get("directory", "")
@@ -385,9 +395,47 @@ class DictEditorWindow(QMainWindow):
             self.tree_widget.populate_tree(data, None)
             self.tree_widget.resizeColumnToContents(0)
             self.tree_widget.resizeColumnToContents(1)
+            self.setWindowTitle("Dictionary Editor - " + filename)
+
+    def get_expanded_recursive(self):
+        expanded = []
+        def traverse(item):
+            expanded.append(item.isExpanded())
+            for i in range(item.childCount()):
+                traverse(item.child(i))
+
+        traverse(self.tree_widget.invisibleRootItem())
+        return expanded
+
+    def set_expanded_recursive(self, expanded):
+        print(expanded)
+        def traverse(item):
+            item.setExpanded(expanded.pop(0))
+            for i in range(item.childCount()):
+                traverse(item.child(i))
+
+        traverse(self.tree_widget.invisibleRootItem())
+
 
     def refresh(self):
-        self.open_file(self.filename)
+        v = self.get_expanded_recursive()
+        if self.filename:
+            self.open_file(self.filename)
+            self.set_expanded_recursive(v)
+
+    def closeEvent(self, a0):
+        if self.filename:
+            with open("dict-editor.yaml", "w") as f:
+                v = self.get_expanded_recursive()
+                expanded = ""
+                for e in v:
+                    expanded += "1" if e else "0"
+
+                geometry = [self.geometry().x(), self.geometry().y(), self.geometry().width(), self.geometry().height()]
+                yaml.dump({"filename": self.filename, "expanded": expanded, "geometry": geometry}, f)
+
+
+        super().closeEvent(a0)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
