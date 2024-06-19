@@ -2,20 +2,26 @@
 name = "dicteditor"
 version = "0.0.1"
 authors = [
-  { name="Example Author", email="author@example.com" },
+  { name="Danilo Tardioli", email="dantard@unizar.es" },
 ]
-description = "A small example package"
+description = "A simple dictionary editor"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "License :: OSI Approved :: GPL 3.0 License",
+    "Operating System :: Linux",
 ]
 
+dependencies = [
+    "pyqt5",
+    "pyyaml",
+]
+
+
 [project.urls]
-Homepage = "https://github.com/pypa/sampleproject"
-Issues = "https://github.com/pypa/sampleproject/issues"
+Homepage = "https://github.com/dantard/dict-editor"
+Issues = "https://github.com/dantard/dict-editor/issues"
 
 [project.scripts]
-kakka = "dicteditor.deditor:main2"
+dict-editor = "dicteditor.deditor:main"
