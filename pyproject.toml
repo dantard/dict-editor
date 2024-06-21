@@ -16,6 +16,7 @@ classifiers = [
 dependencies = [
     "pyqt5",
     "pyyaml",
+    "easyconfig@git+https://github.com/dantard/easyconfig.git",
 ]
 
 

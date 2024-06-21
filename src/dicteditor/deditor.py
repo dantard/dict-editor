@@ -12,11 +12,30 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidget, QTreeWidgetI
 import json
 
 import yaml
-
+import easyconfig
 import dicteditor.resources
+from easyconfig.EasyConfig import EasyConfig
+
+
+def get_elem_from_text(text):
+    try:
+        value = int(text)
+    except ValueError:
+        try:
+            value = float(text)
+        except ValueError:
+            value = text
+    return value
 
 
 class Item(QTreeWidgetItem):
+
+    color_int = QtCore.Qt.darkGreen
+    color_float = QtCore.Qt.cyan
+    color_string = QtCore.Qt.black
+    color_dict = QtCore.Qt.red
+    color_list = QtCore.Qt.darkGreen
+
     def __init__(self, parent, data):
         super().__init__(parent, data)
         self.item_flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsSelectable
@@ -35,18 +54,14 @@ class Item(QTreeWidgetItem):
             self.widgets[column] = label
 
     def get_key(self):
-        try:
-            key = self.key_type(self.text(0))
-        except ValueError:
-            key = self.text(0)
-        return key
+        return get_elem_from_text(self.text(0))
+
+    def update_type(self):
+        self.key_type = type(self.get_key())
+        self.value_type = type(self.get_value())
 
     def get_value(self):
-        try:
-            value = self.value_type(self.text(1))
-        except ValueError:
-            value = self.text(1)
-        return value
+        return get_elem_from_text(self.text(1))
 
     def setText(self, column: int, atext: str) -> None:
         if self.widgets.get(column) is not None:
@@ -55,18 +70,29 @@ class Item(QTreeWidgetItem):
         else:
             super().setText(column, atext)
 
+    def apply_color(self):
+        pass
+    def set_color(self, check_type, column=1):
+        if check_type == str:
+            self.setForeground(column, self.color_string)
+        elif check_type == int:
+            self.setForeground(column, self.color_int)
+        elif check_type == float:
+            self.setForeground(column, self.color_float)
+        else:
+            self.setForeground(column, QtCore.Qt.darkMagenta)
+
 
 class DictRoot(Item):
     def __init__(self, parent):
         super().__init__(parent, ["{dict}"])
-        self.setForeground(0, QtCore.Qt.red)
+        self.setForeground(0, self.color_dict)
         self.readonly([0])
-
 
 class ListRoot(Item):
     def __init__(self, parent):
         super().__init__(parent, ["[list]"])
-        self.setForeground(0, QtCore.Qt.magenta)
+        self.setForeground(0, self.color_list)
         self.readonly([0])
 
 
@@ -74,18 +100,23 @@ class DictEntryDict(Item):
     def __init__(self, parent, key):
         super().__init__(parent, [str(key), "{dict}"])
         self.key_type = type(key)
-        self.setForeground(0, QtCore.Qt.red)
-        self.setForeground(1, QtCore.Qt.red)
+        self.setForeground(1, self.color_dict)
         self.readonly([1])
+        self.apply_color()
+    def apply_color(self):
+        self.set_color(self.key_type, 0)
 
 
 class DictEntryList(Item):
     def __init__(self, parent, key):
         super().__init__(parent, [str(key), "[list]"])
         self.key_type = type(key)
-        self.setForeground(0, QtCore.Qt.darkGreen)
-        self.setForeground(1, QtCore.Qt.darkGreen)
+        self.setForeground(1, self.color_list)
         self.readonly([1])
+        self.apply_color()
+
+    def apply_color(self):
+        self.set_color(self.key_type, 0)
 
 
 class DictEntryValue(Item):
@@ -93,8 +124,10 @@ class DictEntryValue(Item):
         super().__init__(parent, [str(key), str(value)])
         self.key_type = type(key)
         self.value_type = type(value)
-        self.setForeground(0, QtCore.Qt.magenta)
-        self.setForeground(1, QtCore.Qt.blue)
+        self.apply_color()
+    def apply_color(self):
+        self.set_color(self.key_type, 0)
+        self.set_color(self.value_type,1)
 
 
 class ListEntry(Item):
@@ -105,8 +138,11 @@ class ListEntryList(ListEntry):
     def __init__(self, parent, key):
         super().__init__(parent, ["[" + str(key) + "]", "[list]"])
         self.setForeground(0, QtCore.Qt.black)
-        self.setForeground(1, QtCore.Qt.darkGreen)
         self.readonly([0, 1])
+        self.apply_color()
+
+    def apply_color(self):
+        self.set_color(self.value_type, 1)
 
 
 class ListEntryValue(ListEntry):
@@ -114,8 +150,10 @@ class ListEntryValue(ListEntry):
         super().__init__(parent, ["[" + str(key) + "]", str(value)])
         self.value_type = type(value)
         self.setForeground(0, QtCore.Qt.black)
-        self.setForeground(1, QtCore.Qt.blue)
         self.readonly([0])
+        self.apply_color()
+    def apply_color(self):
+        self.set_color(self.value_type, 1)
 
 
 class ListEntryDict(ListEntry):
@@ -284,31 +322,53 @@ class DictTreeWidget(QTreeWidget):
 
 
 class DictEditorWindow(QMainWindow):
+    colors = ["black", "red", "green", "blue", "cyan", "magenta", "yellow", "gray"]
+    qcolors = [Qt.black, Qt.red, Qt.darkGreen, Qt.blue, Qt.cyan, Qt.magenta, Qt.yellow, Qt.gray]
+
+
     def __init__(self):
         super().__init__()
-        self.filename = None
 
         config_dir = os.path.join(os.path.expanduser('~'), '.config', 'dict-editor')
+        self.config_file = config_dir + os.sep + "config.yaml"
         os.makedirs(config_dir, exist_ok=True)
-        self.config_file = os.path.join(config_dir, 'config.yaml')
+
+        self.config = EasyConfig()
+        general = self.config.root().addSubSection("General")
+        open_last = general.addCheckbox("open_last", pretty="Open last file", default=True)
+
+        colors = self.config.root().addSubSection("Colors")
+        self.color_string = colors.addCombobox("string", pretty="String", items=self.colors, default=3)
+        self.color_int = colors.addCombobox("int", pretty="Int", items=self.colors, default=2)
+        self.color_float = colors.addCombobox("float", pretty="Float", items=self.colors, default=4)
+        self.color_dict = colors.addCombobox("dict", pretty="Dict", items=self.colors, default=1)
+        self.color_list = colors.addCombobox("list", pretty="List", items=self.colors, default=5)
+        private = self.config.root().addHidden("private")
+        self.filename = private.addString("filename")
+        self.expanded = private.addString("expanded")
+        self.pose = private.addList("pose")
+        self.config.load(self.config_file)
+
+        self.update_colors()
 
         self.setWindowTitle("Dictionary Editor")
-        self.setGeometry(100, 100, 600, 400)
+        pose = self.pose.get_value()
+        if pose is not None:
+            self.setGeometry(pose[0], pose[1], pose[2], pose[3])
+
         file = self.menuBar().addMenu("File")
         file.addAction("Open", self.open_file)
         file.addAction("Save", self.save)
         file.addAction("Save as", self.save_as)
-
-        self.config = {}
-        try:
-            with open(self.config_file, "r") as f:
-                self.config = yaml.load(f, Loader=yaml.FullLoader)
-        except FileNotFoundError:
-            pass
+        edit = self.menuBar().addMenu("Edit")
+        edit.addAction("Preferences", self.edit_preferences)
 
         tb = self.addToolBar("File")
         tb.addAction(QIcon(":/icons/open.png"), "Open", self.open_file)
         tb.addAction(QIcon(":/icons/save.png"), "Save", self.save)
+        tb.addSeparator()
+        tb.addAction(QIcon(":/icons/expand.png"), "Expand all", self.expand_all)
+        tb.addSeparator()
         tb.addAction(QIcon(":/icons/refresh.png"), "Refresh", self.refresh)
 
         self.tree_widget = DictTreeWidget()
@@ -321,38 +381,61 @@ class DictEditorWindow(QMainWindow):
         self.setWindowTitle("Dictionary Editor")
         self.show()
 
-        filename = None
-        try:
-            with open(self.config_file, "r") as f:
-                self.config = yaml.load(f, Loader=yaml.FullLoader)
-                self.set_expanded_recursive([int(x) for x in self.config["expanded"]])
-                x = self.config.get("geometry", [0, 0, 100, 200])
-                self.setGeometry(x[0], x[1], x[2], x[3])
-                filename = self.config["filename"]
-
-        except FileNotFoundError:
-            pass
+        self.current_filename = self.filename.get_value()
 
         if len(sys.argv) > 1:
-            self.open_file(sys.argv[1])
-        elif filename is not None and os.path.exists(filename):
-            self.open_file(filename)
+            self.current_filename = sys.argv[1]
+            self.open_file(self.current_filename)
+
+        elif self.current_filename is not None and os.path.exists(self.current_filename) and open_last.get_value() is True:
+            self.open_file(self.current_filename)
+            expanded = self.expanded.get_value()
+            if expanded is not None:
+                self.set_expanded_recursive([int(x) for x in expanded])
+
+        self.tree_widget.itemChanged.connect(self.item_changed)
+
+    def expand_all(self):
+        self.tree_widget.expandAll()
+        self.tree_widget.resizeColumnToContents(0)
+        self.tree_widget.resizeColumnToContents(1)
+
+    def update_colors(self):
+        Item.color_int = self.qcolors[self.color_int.get_value()]
+        Item.color_float = self.qcolors[self.color_float.get_value()]
+        Item.color_string = self.qcolors[self.color_string.get_value()]
+        Item.color_dict = self.qcolors[self.color_dict.get_value()]
+        Item.color_list = self.qcolors[self.color_list.get_value()]
+
+    def edit_preferences(self):
+        if self.config.exec():
+            self.config.save(self.config_file)
+            self.update_colors()
+            expanded = self.get_expanded_recursive()
+            data = self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0))
+            self.populate(data)
+            self.set_expanded_recursive(expanded)
+
+    def item_changed(self, item, column):
+        item.update_type()
+        item.apply_color()
 
     def save(self, filename=None):
-        self.filename = filename if filename else self.filename
-        if self.filename:
+        self.current_filename = filename if filename else self.current_filename
+        if self.current_filename:
             data = self.tree_widget.traverse_tree(self.tree_widget.invisibleRootItem().child(0))
-            with open(self.filename, "w") as f:
-                if self.filename.endswith(".json"):
+            with open(self.current_filename, "w") as f:
+                if self.current_filename.endswith(".json"):
                     json.dump(data, f)
-                elif self.filename.endswith(".yaml"):
+                elif self.current_filename.endswith(".yaml"):
                     yaml.dump(data, f)
-            self.setWindowTitle("Dictionary Editor - " + self.filename)
+            self.setWindowTitle("Dictionary Editor - " + self.current_filename)
 
     def save_as(self):
         options = QFileDialog.Options()
-        filename, ext = QFileDialog.getSaveFileName(self, "Save File", "", "YAML or JSON Files (*.json *.yaml)", options=options)
+        filename, ext = QFileDialog.getSaveFileName(self, "Save File", "", "YAML files (*.yaml) ;; JSON Files (*.json)", options=options)
         if filename:
+            print("hijhlkj", ext)
             ext = re.search(r'\(\*(\.[a-zA-Z0-9]+)\)', ext).group(1)
             if not filename.endswith(ext):
                 filename += ext
@@ -366,7 +449,7 @@ class DictEditorWindow(QMainWindow):
         msg.exec_()
 
     def open_file(self, filename=None):
-        directory = self.config.get("directory", "")
+        directory = None
         if filename is None:
             filename, _ = QFileDialog.getOpenFileName(self, "Open File", directory, "YAML or JSON Files (*.json *.yaml)")
 
@@ -384,22 +467,20 @@ class DictEditorWindow(QMainWindow):
             else:
                 self.show_error_message("File must be a YAML or JSON file")
                 return
+
+            self.current_filename = filename
+            self.setWindowTitle("Dictionary Editor - " + filename)
+            self.populate(data)
+
+    def populate(self, data):
             try:
-                directory = os.path.dirname(filename)
-                self.config["directory"] = directory
-                self.filename = filename
                 self.tree_widget.clear()
                 self.tree_widget.populate_tree(data, None)
                 self.tree_widget.resizeColumnToContents(0)
                 self.tree_widget.resizeColumnToContents(1)
-                self.setWindowTitle("Dictionary Editor - " + filename)
-                self.dump_config()
             except Exception as e:
-                self.show_error_message("Error opening file: " + str(e))
+                self.show_error_message("Error populating tree" + str(e))
 
-    def dump_config(self):
-        with open(self.config_file, "w") as f:
-            yaml.dump(self.config, f)
 
     def get_expanded_recursive(self):
         expanded = []
@@ -423,19 +504,22 @@ class DictEditorWindow(QMainWindow):
 
     def refresh(self):
         v = self.get_expanded_recursive()
-        if self.filename:
-            self.open_file(self.filename)
+        if self.current_filename:
+            self.open_file(self.current_filename)
             self.set_expanded_recursive(v)
 
     def closeEvent(self, a0):
+        print("akkkkkkkkkkk", self.current_filename)
         v = self.get_expanded_recursive()
         expanded = ""
         for e in v:
             expanded += "1" if e else "0"
 
         geometry = [self.geometry().x(), self.geometry().y(), self.geometry().width(), self.geometry().height()]
-        self.config.update({"filename": self.filename, "expanded": expanded, "geometry": geometry})
-        self.dump_config()
+        self.pose.set_value(geometry)
+        self.filename.set_value(self.current_filename)
+        self.expanded.set_value(expanded)
+        self.config.save(self.config_file)
 
         super().closeEvent(a0)
 
