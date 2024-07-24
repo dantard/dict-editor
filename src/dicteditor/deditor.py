@@ -29,7 +29,6 @@ def get_elem_from_text(text):
 
 
 class Item(QTreeWidgetItem):
-
     color_int = QtCore.Qt.darkGreen
     color_float = QtCore.Qt.cyan
     color_string = QtCore.Qt.black
@@ -40,8 +39,9 @@ class Item(QTreeWidgetItem):
         super().__init__(parent, data)
         self.item_flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsSelectable
         self.setFlags(self.item_flags)
-        self.key_type = str
-        self.value_type = str
+        self.key_type = type(self.get_key())
+        self.value_type = type(self.get_value())
+        self.update_type()
         self.widgets = {}
 
     def readonly(self, columns):
@@ -72,6 +72,7 @@ class Item(QTreeWidgetItem):
 
     def apply_color(self):
         pass
+
     def set_color(self, check_type, column=1):
         if check_type == str:
             self.setForeground(column, self.color_string)
@@ -89,6 +90,7 @@ class DictRoot(Item):
         self.setForeground(0, self.color_dict)
         self.readonly([0])
 
+
 class ListRoot(Item):
     def __init__(self, parent):
         super().__init__(parent, ["[list]"])
@@ -99,10 +101,10 @@ class ListRoot(Item):
 class DictEntryDict(Item):
     def __init__(self, parent, key):
         super().__init__(parent, [str(key), "{dict}"])
-        self.key_type = type(key)
         self.setForeground(1, self.color_dict)
         self.readonly([1])
         self.apply_color()
+
     def apply_color(self):
         self.set_color(self.key_type, 0)
 
@@ -110,7 +112,6 @@ class DictEntryDict(Item):
 class DictEntryList(Item):
     def __init__(self, parent, key):
         super().__init__(parent, [str(key), "[list]"])
-        self.key_type = type(key)
         self.setForeground(1, self.color_list)
         self.readonly([1])
         self.apply_color()
@@ -122,12 +123,11 @@ class DictEntryList(Item):
 class DictEntryValue(Item):
     def __init__(self, parent, key, value):
         super().__init__(parent, [str(key), str(value)])
-        self.key_type = type(key)
-        self.value_type = type(value)
         self.apply_color()
+
     def apply_color(self):
         self.set_color(self.key_type, 0)
-        self.set_color(self.value_type,1)
+        self.set_color(self.value_type, 1)
 
 
 class ListEntry(Item):
@@ -148,10 +148,10 @@ class ListEntryList(ListEntry):
 class ListEntryValue(ListEntry):
     def __init__(self, parent, key, value):
         super().__init__(parent, ["[" + str(key) + "]", str(value)])
-        self.value_type = type(value)
         self.setForeground(0, QtCore.Qt.black)
         self.readonly([0])
         self.apply_color()
+
     def apply_color(self):
         self.set_color(self.value_type, 1)
 
@@ -325,7 +325,6 @@ class DictEditorWindow(QMainWindow):
     colors = ["black", "red", "green", "blue", "cyan", "magenta", "yellow", "gray"]
     qcolors = [Qt.black, Qt.red, Qt.darkGreen, Qt.blue, Qt.cyan, Qt.magenta, Qt.yellow, Qt.gray]
 
-
     def __init__(self):
         super().__init__()
 
@@ -473,14 +472,13 @@ class DictEditorWindow(QMainWindow):
             self.populate(data)
 
     def populate(self, data):
-            try:
-                self.tree_widget.clear()
-                self.tree_widget.populate_tree(data, None)
-                self.tree_widget.resizeColumnToContents(0)
-                self.tree_widget.resizeColumnToContents(1)
-            except Exception as e:
-                self.show_error_message("Error populating tree" + str(e))
-
+        try:
+            self.tree_widget.clear()
+            self.tree_widget.populate_tree(data, None)
+            self.tree_widget.resizeColumnToContents(0)
+            self.tree_widget.resizeColumnToContents(1)
+        except Exception as e:
+            self.show_error_message("Error populating tree" + str(e))
 
     def get_expanded_recursive(self):
         expanded = []
